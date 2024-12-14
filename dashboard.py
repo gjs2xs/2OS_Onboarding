@@ -7,7 +7,10 @@ import streamlit as st
 import os
 from openai import OpenAI
 from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine_similarity
+import kagglehub
+from evaluate import load
 
+import pandas as pd
 
 
 api_key = os.getenv('OPENAI_API_KEY')
@@ -23,7 +26,7 @@ def chat_gpt(sentence1, sentence2):
     prompt = f"Provide only a semantic similarity score between the following sentences as a single number. Sentence 1: {sentence1}. Sentence 2: {sentence2}."
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        max_tokens = 50,
+        max_tokens = 10,
         temperature= 0,
         messages=[
                 {"role": "system", "content": "You are a helpful assistant providing semantic similarity scores."},
@@ -55,6 +58,102 @@ def compute_metrics(scores1, scores2):
 
 
 
-# print(chat_gpt("hello my name is Nikhita", "Hello my name is Guntu"))
 
-print(cosine_similarity("hello my name is Nikhita", "Hello my name is Guntu"))
+def compare_metrics(dataset):
+    chatgpt_scores = []
+    cosine_scores = []
+    true_scores = dataset['score']
+    
+    # Iterate through sentence pairs and calculate scores
+    for sent1, sent2 in zip(dataset['sentence1'], dataset['sentence2']):
+        print("Sentence 1:", sent1)
+        print("Sentence 2:", sent2)
+
+        # Get ChatGPT score
+        gpt_score = float(chat_gpt(sent1, sent2))
+        print("ChatGPT Score:", gpt_score)
+        chatgpt_scores.append(gpt_score)
+        
+        # Get Cosine Similarity score
+        cos_score = cosine_similarity(sent1, sent2)
+        print("Cosine Similarity Score:", cos_score)
+        cosine_scores.append(cos_score)
+
+    # Compute metrics for overall lists
+    chatgpt_metrics = compute_metrics(true_scores, chatgpt_scores)
+    cosine_metrics = compute_metrics(true_scores, cosine_scores)
+
+    # Output the results
+    print("\nChatGPT Metrics:")
+    for key, value in chatgpt_metrics.items():
+        print(f"{key}: {value}")
+
+    print("\nCosine Similarity Metrics:")
+    for key, value in cosine_metrics.items():
+        print(f"{key}: {value}")
+
+    return chatgpt_metrics, cosine_metrics
+
+def compute_rouge():
+    # Load the dataset
+    dataset = load_dataset("cnn_dailymail", "3.0.0")
+    sample_data = dataset["test"].select(range(10))  # Select a small subset for testing
+
+    articles = sample_data["article"]
+    highlights = sample_data["highlights"]
+
+    # Initialize the ROUGE metric
+    rouge = load("rouge")
+
+    # Generate predictions using GPT-4o-mini
+    model_predictions = []
+    for article in articles:
+        # Use GPT-4o-mini to generate summaries
+        prompt = f"Summarize the following article: {article}"
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=150,  # Limit the token count for the summary
+            temperature=0,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant providing concise summaries of news articles."},
+                {"role": "user", "content": prompt}
+            ],
+        )
+        summary = response.choices[0].message.content.strip()
+        model_predictions.append(summary)
+
+    # Compute ROUGE scores between:
+    # 1. Model output and dataset input
+    rouge_model_input = rouge.compute(predictions=model_predictions, references=articles)
+
+    # 2. Dataset input and dataset output
+    rouge_input_output = rouge.compute(predictions=articles, references=highlights)
+
+    # Print the results
+    print("ROUGE Scores Between Model's Output and Dataset's Input:")
+    for key, value in rouge_model_input.items():
+        print(f"{key}: {value}")
+
+    print("\nROUGE Scores Between Dataset's Input and Dataset's Output:")
+    for key, value in rouge_input_output.items():
+        print(f"{key}: {value}")
+
+    return rouge_model_input, rouge_input_output
+
+def compute_bleu(prediction, reference):
+    bleu = load("bleu")
+    return bleu.compute(predictions=[prediction.split()], references=[[reference.split()]])
+    
+
+rouge_model_input, rouge_input_output = compute_rouge()
+
+rouge_model_input_values = list(rouge_model_input.values())
+rouge_input_output_values = list(rouge_input_output.values())
+
+# Compute metrics between the two ROUGE score sets
+comparison_metrics = compute_metrics(rouge_model_input_values, rouge_input_output_values)
+
+# Print the results
+print("\nComparison Metrics Between ROUGE Score Sets:")
+for key, value in comparison_metrics.items():
+    print(f"{key}: {value}")
