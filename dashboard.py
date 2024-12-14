@@ -140,20 +140,58 @@ def compute_rouge():
 
     return rouge_model_input, rouge_input_output
 
-def compute_bleu(prediction, reference):
-    bleu = load("bleu")
-    return bleu.compute(predictions=[prediction.split()], references=[[reference.split()]])
+
     
 
+st.title("Semantic Similarity Analysis Dashboard")
+
+# Dataset Selection and Preview
+st.header("Dataset")
+dataset = load_dataset("mteb/stsbenchmark-sts")
+sample_data = dataset["validation"].select(range(10))  # Select 10 data points
+st.write("Sample Data:")
+st.write(sample_data)
+
+# GPT and Cosine Similarity Scores
+st.header("Semantic Similarity Scores")
+chatgpt_scores = []
+cosine_scores = []
+true_scores = sample_data["score"]
+
+with st.spinner("Calculating scores..."):
+    for sent1, sent2 in zip(sample_data["sentence1"], sample_data["sentence2"]):
+        gpt_score = float(chat_gpt(sent1, sent2))
+        chatgpt_scores.append(gpt_score)
+        
+        cos_score = cosine_similarity(sent1, sent2)
+        cosine_scores.append(cos_score)
+
+# Display scores
+st.write("ChatGPT Scores:", chatgpt_scores)
+st.write("Cosine Similarity Scores:", cosine_scores)
+
+# Metrics Comparison
+st.header("Metrics Comparison")
+chatgpt_metrics = compute_metrics(true_scores, chatgpt_scores)
+cosine_metrics = compute_metrics(true_scores, cosine_scores)
+
+st.subheader("ChatGPT Metrics")
+st.write(chatgpt_metrics)
+
+st.subheader("Cosine Similarity Metrics")
+st.write(cosine_metrics)
+
+st.header("Text Evaluation Metrics")
+
 rouge_model_input, rouge_input_output = compute_rouge()
+rouge_comparison = compute_metrics(list(rouge_model_input.values()), list(rouge_input_output.values()))
 
-rouge_model_input_values = list(rouge_model_input.values())
-rouge_input_output_values = list(rouge_input_output.values())
+st.subheader("ROUGE Comparison")
+st.write("Model Output vs Dataset Input:", rouge_model_input)
+st.write("Dataset Input vs Output:", rouge_input_output)
+st.write("Comparison Metrics:", rouge_comparison)
 
-# Compute metrics between the two ROUGE score sets
-comparison_metrics = compute_metrics(rouge_model_input_values, rouge_input_output_values)
 
-# Print the results
-print("\nComparison Metrics Between ROUGE Score Sets:")
-for key, value in comparison_metrics.items():
-    print(f"{key}: {value}")
+# Conclusions
+st.header("Conclusions")
+st.write("Compare which metric (ChatGPT or Cosine Similarity) is closer to the true scores based on RMSE, MSE, or AE.")
