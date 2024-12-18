@@ -120,6 +120,3 @@ st.subheader("ROUGE Comparison")
 st.write("Model Output vs Dataset Input:", rouge_model_input)
 st.write("Dataset Input vs Output:", rouge_input_output)
 st.write("Comparison Metrics:", rouge_comparison)
-
-st.header("Conclusions")
-st.write("Compare which metric (ChatGPT or Cosine Similarity) is closer to the true scores based on RMSE, MSE, or AE.")
